@@ -24,6 +24,28 @@ class AES():
             subBytesTable.append(int(a))
         return subBytesTable
     
+    invSubBytesTable = []   #for decryption
+    subBytesTable = []  
+
+    def genTables(self):
+        c = BitVector(bitstring='01100011')
+        d = BitVector(bitstring='00000101')
+        for i in range(0, 256):
+            # For the encryption SBox
+            a = BitVector(intVal = i, size=8).gf_MI(self.AES_modulus, 8) if i != 0 else BitVector(intVal=0)
+            # For bit scrambling for the encryption SBox entries:
+            a1,a2,a3,a4 = [a.deep_copy() for x in range(4)]
+            a ^= (a1 >> 4) ^ (a2 >> 5) ^ (a3 >> 6) ^ (a4 >> 7) ^ c
+            self.subBytesTable.append(int(a))
+            # For the decryption Sbox:
+            b = BitVector(intVal = i, size=8)
+            # For bit scrambling for the decryption SBox entries:
+            b1,b2,b3 = [b.deep_copy() for x in range(3)]
+            b = (b1 >> 2) ^ (b2 >> 5) ^ (b3 >> 7) ^ d
+            check = b.gf_MI(self.AES_modulus, 8)
+            b = check if isinstance(check, BitVector) else 0
+            self.invSubBytesTable.append(int(b))
+    
     def gee(self, keyword, round_constant, byte_sub_table):
         '''
         This is the g() function you see in Figure 4 of Lecture 8.
@@ -78,8 +100,6 @@ class AES():
         #         ciphertext (str) - filename containing ciphertext
     # return void
     def encrypt(self, plaintext:str, ciphertext:str) -> None:
-        self.plainfile = plaintext
-        self.cipherfile = ciphertext
 
         # getting key schedule
         # print("file name is: ", self.keyfile)
@@ -156,6 +176,7 @@ class AES():
                 for i in range(4):
                     for j in range(4):
                         statearray[j][i] = newBitVec[32*i + 8*j:32*i + 8*(j+1)]
+                print('statearray type: ', type(statearray), 'contents: ', statearray)
                 # self.print_st_ar(statearray)
                 # print(newBitVec.get_bitvector_in_hex())
 
@@ -197,11 +218,15 @@ class AES():
             tempstring += state_bv.get_hex_string_from_bitvector()
 
                 # break
-            print(tempstring)
+            # print(tempstring)
             # break
         
         with open(ciphertext, 'w') as f:
             f.write(tempstring)
+
+
+
+
 
 
 
@@ -212,18 +237,141 @@ class AES():
     #         decrypted (str) - filename containing recovered plaintext
     # return void
     def decrypt(self, ciphertext:str, decrypted:str) -> None:
-        self.cipherfile = ciphertext
-        self.decryptfile = decrypted
+
         # open the file like we opened DES decrypt file
+        new_filename = "temp.txt"
+        with open(ciphertext, 'r') as f:
+            tempstring = f.read()
+        bv= BitVector(hexstring = tempstring)
+        with open(new_filename, 'wb') as f:
+            bv.write_to_file(f)
+        outText='' # for final output
+
         
         # get key schedule, get round keys
-            
+        with open(self.keyfile, 'r') as f:
+            textkey = f.read()
+        keyVec = BitVector(textstring = textkey)
+        # print("keyvec is: ", keyVec)
+        key_words = self.gen_key_schedule_256(keyVec)
+        round_keys = [None for i in range(self.num_rounds+1)]
+        for i in range(0, self.num_rounds+1):
+            round_keys[i] = (key_words[i*4] + key_words[i*4+1] + key_words[i*4+2] + key_words[i*4+3])
+
+        round_keys = list(reversed(round_keys))
         # have to reverse the round keys
         # continue as in encryption
-        # in while loop, its the same until the inverse shift rows (right instead of left)
-        # inverse sub bytes, same call except use inversesubbytestable
-        # add round key same way
-        # do inverse mix columns, almost the same except we change the matrix (see in document)
+        # getting blocks of plaintext as hex
+        bitCiphertext = BitVector(filename = new_filename)
+        # print('ciphertext is: ', bitCiphertext.getHexStringFromBitVector())
+        # make state array
+        statearray = [[0 for x in range(4)] for x in range(4)]
+        temparray = [[0 for x in range(4)] for x in range(4)]
+
+        # inverse cols array
+        colsarray = [[0xe,0xb,0xd,0x9], 
+                     [0x9,0xe,0xb,0xd],
+                     [0xd,0x9,0xe,0xb],
+                     [0xb,0xd,0x9,0xe]]
+        tempstring = ''
+
+        self.genTables()
+        while (bitCiphertext.more_to_read):
+            bitvec = bitCiphertext.read_bits_from_file(128)
+            if bitvec.size < 128:
+                bitvec.pad_from_right(128 - (bitvec.size % 128))
+            chunk = bitvec ^ round_keys[0]
+            print('bitvec is: ', type(bitvec), 'contents are: ', bitvec.getHexStringFromBitVector())
+            print('chunk is: ', type(chunk), 'contents are: ', chunk.getHexStringFromBitVector())
+            print()
+            for i in range (4):
+                for j in range (4):
+                    statearray[j][i] = int(chunk[32*i + 8*j:32*i + 8*(j+1)])
+            # print('statearray is: ', type(statearray), 'contents are: ', statearray)
+            for currentround in range(14):
+                # shift
+                statearray[1] = np.roll(statearray[1], 1)
+                statearray[2] = np.roll(statearray[2], 2)
+                statearray[3] = np.roll(statearray[3], 3)
+
+                #here I tried to convert to a bitvector and failed many, many times. 
+
+                print('round is: ', currentround)
+                print('statearray is: ', type(statearray), 'contents are: ', statearray)
+                # sub bytes
+                for i in range (4):
+                    for j in range (4):
+                        bitvec_index = statearray[i][j]  # Convert the bitvector to an integer index
+                        statearray[i][j] = self.invSubBytesTable[bitvec_index]  # Use the integer index to access subBytesTable
+                
+                for i in range (4):
+                    for j in range (4):
+                        # print(hex(statearray[j][i]))
+                        temparray[i][j] = statearray[j][i] # transposing
+                statearray = temparray
+
+                # convert back to a bitvector because I messed it up and converted to np
+                newBitVec = BitVector(size=0)
+                for row in statearray:
+                    for element in row:
+                        element_bv = BitVector(intVal=element, size=8)
+                        newBitVec += element_bv
+                for i in range(4):
+                    for j in range(4):
+                        statearray[j][i] = newBitVec[32*i + 8*j:32*i + 8*(j+1)]
+
+                round_key = round_keys[currentround + 1]
+                # print('statearray is: ', statearray)
+                print()
+                print('round key is: ', round_key)
+                print()
+                tempBitVec = BitVector(size=0)
+                for i in range(4):
+                    for j in range(4):
+                        tempBitVec += statearray[j][i]
+                statearray = tempBitVec ^ round_key
+
+                if (currentround != 13):
+
+                    # mix columns 
+                    for i in range(4):
+                        for j in range(4):
+                            column = statearray[i*32:(i+1)*32]
+                            # Perform the MixColumns operation for each byte in the column
+                            temparray[j][i] = column[0:8].gf_multiply_modular(BitVector(intVal=colsarray[j][0], size=8), self.AES_modulus, 8) ^ \
+                                            column[8:16].gf_multiply_modular(BitVector(intVal=colsarray[j][1], size=8), self.AES_modulus, 8) ^ \
+                                            column[16:24].gf_multiply_modular(BitVector(intVal=colsarray[j][2], size=8), self.AES_modulus, 8) ^ \
+                                            column[24:32].gf_multiply_modular(BitVector(intVal=colsarray[j][3], size=8), self.AES_modulus, 8)
+                            # ... and so on for the other rows
+                
+                # transposing
+                statearray = [[temparray[j][i] for j in range(4)] for i in range(4)]
+
+
+                #     # print()  # Creates a new line after each row for better readability
+                # bitvec = state_bv
+
+                # statearray = state_bv
+                # tempBitVec = BitVector(size=0)
+                # for i in range(4):
+                #     for j in range(4):
+                #         tempBitVec += statearray[j][i]
+                
+                # in while loop, its the same until the inverse shift rows (right instead of left)
+                # inverse sub bytes, same call except use inversesubbytestable
+                # add round key same way
+                # do inverse mix columns, almost the same except we change the matrix (see in document)
+            state_bv = BitVector(size=0)
+            for row in statearray:
+                for item in row:
+                    # print(bitvec.get_hex_string_from_bitvector(), end=' ')
+                    state_bv += item
+            print("round ", currentround, "output: ", state_bv.get_hex_string_from_bitvector())
+            # break
+            # outText += state_bv.get_hex_string_from_bitvector()
+            outText += state_bv.get_bitvector_in_ascii()
+        with open(decrypted, 'w') as f:
+            f.write(outText)
 
 
 
