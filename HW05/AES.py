@@ -25,12 +25,13 @@ class AES():
         # iv (bitvector): 128-bit init vector
         # image_file (string): input .ppm file name
         # enc_image (string): output .ppm file name
-        
         f2 = open(enc_image, 'wb')
+        '''
         f = open(image_file, 'rb')
         f2.write(f.readline()) # write 3 lines for header
         f2.write(f.readline())
         f2.write(f.readline())
+        '''
         with open(self.keyfile, 'r') as f:
             textkey = f.read()
         keyVec = BitVector(textstring = textkey)
@@ -39,21 +40,37 @@ class AES():
         # what is encrypted is the XOR of the encryption of the integer and the b bits
         # of the plaintext
         bv_image = BitVector( filename=image_file) # cursor already moved
+        j = 0
+        while j < 3:
+            temp = bv_image.read_bits_from_file(8)
+            if(temp.get_bitvector_in_ascii()=='\n'):
+                j += 1
+            temp.write_to_file(f2)
+        print("new")
+
         while (bv_image.more_to_read):
             current_chunk = bv_image.read_bits_from_file(128)
             if current_chunk.size < 128:
+                print("PADDED!!!")
                 current_chunk.pad_from_right(128 - current_chunk.size)
             if current_chunk._getsize() > 0:
-                f3 = open('blocktext.txt', 'wb')
-                iv.write_to_file(f3)
-                enc_bv = self.encrypt_block('blocktext.txt')
-                f3.close()
-                iv = BitVector(intVal = (iv.int_val() + block_num) % 2**128, size = 128) #increment iv
-                print('iv is: ', iv.get_bitvector_in_ascii())
+                # f3 = open('blocktext.txt', 'wb')
+                # iv.write_to_file(f3)
+                enc_bv = self.encrypt_block(iv)
+                print(enc_bv.get_bitvector_in_hex())
+                # this is right
+
+                # f3.close()
+                # iv = BitVector(intVal = (iv.int_val() + 1) % 2**128, size = 128) #increment iv
+                iv = BitVector(intVal = (iv.int_val() + 1), size = 128) #increment iv
+                print(iv.get_bitvector_in_hex())
+                # this is right
                 block_num = block_num + 1
                 output = current_chunk^enc_bv
+                print(output.get_bitvector_in_hex(), end="\n\n")
+                # this is wrong
                 output.write_to_file(f2)
-        f.close()
+        #f.close()
         f2.close()
 
 
@@ -61,30 +78,18 @@ class AES():
 
 
     # takes plaintext block and key, returns string 
-    def encrypt_block(self, plaintext:str):
-        file = open(plaintext, 'r')
-        print('file contents: ', file.read())
-
-        
-        
-        # getting blocks of plaintext as hex
-        bitPlaintext = BitVector(filename = plaintext)
-        
-
+    def encrypt_block(self, plaintext:BitVector):
         # make state array
         statearray = [[0 for x in range(4)] for x in range(4)]
         temparray = [[0 for x in range(4)] for x in range(4)]
-        
-
         colsarray = [[0x2,0x3,0x1,0x1],
                      [0x1,0x2,0x3,0x1],
                      [0x1,0x1,0x2,0x3],
                      [0x3,0x1,0x1,0x2]]
-        tempstring = ''
-        while (bitPlaintext.more_to_read):
-        # for i in range(0, bv.size()//128) # for whatever i name my bitvector
-            bitvec = bitPlaintext.read_bits_from_file(128) #bitvec = bv[i*128:(i+1)*128]
-            print('bitvec is: ', bitvec.get_bitvector_in_hex())
+        
+        for i in range(0, plaintext.length()//128):
+            bitvec = plaintext[i*128:(i+1)*128]
+            # print('bitvec is: ', bitvec.get_bitvector_in_hex())
             if bitvec.size < 128:
                 bitvec.pad_from_right(128 - (bitvec.size % 128))
             chunk = bitvec ^ self.round_keys[0]
@@ -93,18 +98,13 @@ class AES():
                     statearray[j][i] = chunk[32*i + 8*j:32*i + 8*(j+1)]
         
             for currentround in range(14):
-                # print(bitvec.get_hex_string_from_bitvector())
-                # print(chunk.get_bitvector_in_hex())
-                # 2. The first block of plaintext after XOR with the first 4 words of the key schedule#######################################################################
-                # 22041908164e1d175f1a1a0e1d110c45
+                
                 for i in range (4):
                     for j in range (4):
                         # statearray[i][j] = self.subBytesTable[statearray[i][j]]
                         bitvec_index = statearray[i][j].intValue()  # Convert the bitvector to an integer index
                         statearray[i][j] = self.subBytesTable[bitvec_index]  # Use the integer index to access subBytesTable
-                
-                # 3. The first block of plaintext after performing the Sub Bytes Step in round 1:######################################################################## 
-                # 93f2d430472fa4f0cfa2a2aba482fe6e
+             
                 
                 
                 statearray[1] = np.roll(statearray[1], -1)
@@ -116,12 +116,7 @@ class AES():
                         # print(hex(statearray[j][i]))
                         temparray[i][j] = statearray[j][i] # transposing
                 statearray = temparray
-                # for i in range (4):
-                #     for j in range (4):
-                #         print(hex(statearray[i][j]))                    
-
-                # 4. The first block of plaintext after performing the Row Shift Step in round 1:###################################################################################
-                # 932fa26e47a2fe30cf82d4f0a4f2a4ab
+                
 
 
                 # convert back to a bitvector because I messed it up and converted to np
@@ -133,12 +128,7 @@ class AES():
                 for i in range(4):
                     for j in range(4):
                         statearray[j][i] = newBitVec[32*i + 8*j:32*i + 8*(j+1)]
-                # print('statearray type: ', type(statearray), 'contents: ', statearray)
-                # self.print_st_ar(statearray)
-                # print(newBitVec.get_bitvector_in_hex())
-
-                # print(type(newBitVec), newBitVec)
-                # print(type(colsarray), colsarray)
+                
                 if (currentround != 13):
 
                     # mix columns 
@@ -160,10 +150,7 @@ class AES():
                     for bitvec in row:
                         # print(bitvec.get_hex_string_from_bitvector(), end=' ')
                         state_bv += bitvec
-                    # print()  # Creates a new line after each row for better readability
                 
-                # 5. The first block of plaintext after performing the Mix Columns Step in round 1:###############################################################################
-                # 805e51ffbd3152f53c47f5e75107e3ec
                 round_key = self.round_keys[currentround + 1]
 
                 state_bv ^= round_key
@@ -173,15 +160,10 @@ class AES():
                         statearray[j][i] = state_bv[32*i + 8*j:32*i + 8*(j+1)]
                 
                 # break
-            print("round ", currentround, "output: ", state_bv.get_hex_string_from_bitvector())
-            # tempstring += state_bv.get_hex_string_from_bitvector()
-
-                # break
-            # print(tempstring)
-            # break
+            # print("round ", currentround, "output: ", state_bv.get_hex_string_from_bitvector())
             
-        # with open(ciphertext, 'w') as f:
-        #     f.write(tempstring)
+
+
         return state_bv
 
 
