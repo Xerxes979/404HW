@@ -21,6 +21,32 @@ class AES():
         for i in range(0, self.num_rounds+1):
             self.round_keys[i] = (key_words[i*4] + key_words[i*4+1] + key_words[i*4+2] + key_words[i*4+3])
 
+    def x931(self, v0, dt, totalNum, outfile):
+        """
+        inputs: 
+        v0 (bitvec): 128-bit seed value
+        dt (bitvec): 128-bit date/time value
+        totalNum (int): total # of pseudorandom numbers to generate
+
+        method uses these args with the x9.31 algorithm to compute 
+        totalNum # of pseudorandom nums, each represented as bitvec objects
+        these nums are written to output file in base-10 notation
+        returns void
+        """
+        v = [0] * (totalNum+1) #array for seeds
+        r = [0] * totalNum #array for random numbers
+        v[0] = v0
+        dt_enc = self.encrypt_block(dt)
+        for i in range(totalNum):
+            print("i is: ", i)
+            xor1_out = dt_enc^v[i]
+            r[i] = self.encrypt_block(xor1_out)
+            xor2_out = dt_enc^r[i]
+            v[i+1] = self.encrypt_block(xor2_out)
+        with open(outfile, 'w') as f:
+            for i in range(len(r)):
+                print(r[i].get_bitvector_in_ascii())
+
     def ctr_aes_image(self, iv, image_file, enc_image):
         # iv (bitvector): 128-bit init vector
         # image_file (string): input .ppm file name
@@ -46,7 +72,6 @@ class AES():
             if(temp.get_bitvector_in_ascii()=='\n'):
                 j += 1
             temp.write_to_file(f2)
-        print("new")
 
         while (bv_image.more_to_read):
             current_chunk = bv_image.read_bits_from_file(128)
@@ -54,21 +79,14 @@ class AES():
                 print("PADDED!!!")
                 current_chunk.pad_from_right(128 - current_chunk.size)
             if current_chunk._getsize() > 0:
-                # f3 = open('blocktext.txt', 'wb')
-                # iv.write_to_file(f3)
                 enc_bv = self.encrypt_block(iv)
                 print(enc_bv.get_bitvector_in_hex())
-                # this is right
 
-                # f3.close()
-                # iv = BitVector(intVal = (iv.int_val() + 1) % 2**128, size = 128) #increment iv
                 iv = BitVector(intVal = (iv.int_val() + 1), size = 128) #increment iv
                 print(iv.get_bitvector_in_hex())
-                # this is right
                 block_num = block_num + 1
                 output = current_chunk^enc_bv
                 print(output.get_bitvector_in_hex(), end="\n\n")
-                # this is wrong
                 output.write_to_file(f2)
         #f.close()
         f2.close()
@@ -158,12 +176,6 @@ class AES():
                 for i in range (4):
                     for j in range (4):
                         statearray[j][i] = state_bv[32*i + 8*j:32*i + 8*(j+1)]
-                
-                # break
-            # print("round ", currentround, "output: ", state_bv.get_hex_string_from_bitvector())
-            
-
-
         return state_bv
 
 
@@ -514,5 +526,10 @@ if __name__ == "__main__":
         cipher.ctr_aes_image(iv= BitVector(textstring="counter-mode-ctr"),
                              image_file=sys.argv[2],
                              enc_image=sys.argv[4])
+    elif sys.argv[1] == "-r":
+        cipher.x931(v0=BitVector(textstring="counter-mode-ctr"),
+                    dt=BitVector(intVal=501,size=128),
+                    totalNum=int(sys.argv[2]),
+                    outfile=sys.argv[4])
     else:
         sys.exit("Incorrect Command-Line Syntax")
