@@ -38,14 +38,14 @@ class AES():
         v[0] = v0
         dt_enc = self.encrypt_block(dt)
         for i in range(totalNum):
-            print("i is: ", i)
             xor1_out = dt_enc^v[i]
             r[i] = self.encrypt_block(xor1_out)
             xor2_out = dt_enc^r[i]
             v[i+1] = self.encrypt_block(xor2_out)
         with open(outfile, 'w') as f:
             for i in range(len(r)):
-                print(r[i].get_bitvector_in_ascii())
+                # print(int(r[i]))
+                f.write(str(int(r[i])) + "\n")
 
     def ctr_aes_image(self, iv, image_file, enc_image):
         # iv (bitvector): 128-bit init vector
