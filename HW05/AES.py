@@ -58,10 +58,6 @@ class AES():
         f2.write(f.readline())
         f2.write(f.readline())
         '''
-        with open(self.keyfile, 'r') as f:
-            textkey = f.read()
-        keyVec = BitVector(textstring = textkey)
-        block_num = 0
         # the encryption algorithm encrypts a b-bit integer produced by the counter.
         # what is encrypted is the XOR of the encryption of the integer and the b bits
         # of the plaintext
@@ -72,27 +68,18 @@ class AES():
             if(temp.get_bitvector_in_ascii()=='\n'):
                 j += 1
             temp.write_to_file(f2)
-
         while (bv_image.more_to_read):
             current_chunk = bv_image.read_bits_from_file(128)
             if current_chunk.size < 128:
-                print("PADDED!!!")
+                # print("PADDED!!!")
                 current_chunk.pad_from_right(128 - current_chunk.size)
             if current_chunk._getsize() > 0:
                 enc_bv = self.encrypt_block(iv)
-                print(enc_bv.get_bitvector_in_hex())
-
                 iv = BitVector(intVal = (iv.int_val() + 1), size = 128) #increment iv
-                print(iv.get_bitvector_in_hex())
-                block_num = block_num + 1
                 output = current_chunk^enc_bv
-                print(output.get_bitvector_in_hex(), end="\n\n")
+                # print(output.get_bitvector_in_hex(), end="\n")
                 output.write_to_file(f2)
-        #f.close()
         f2.close()
-
-
-
 
 
     # takes plaintext block and key, returns string 
@@ -343,7 +330,7 @@ class AES():
                 for i in range(4):
                     for j in range(4):
                         statearray[j][i] = newBitVec[32*i + 8*j:32*i + 8*(j+1)]
-                print('statearray type: ', type(statearray), 'contents: ', statearray)
+                # print('statearray type: ', type(statearray), 'contents: ', statearray)
                 # self.print_st_ar(statearray)
                 # print(newBitVec.get_bitvector_in_hex())
 
@@ -383,7 +370,7 @@ class AES():
                         statearray[j][i] = state_bv[32*i + 8*j:32*i + 8*(j+1)]
                 
                 # break
-            print("round ", currentround, "output: ", state_bv.get_hex_string_from_bitvector())
+            # print("round ", currentround, "output: ", state_bv.get_hex_string_from_bitvector())
             tempstring += state_bv.get_hex_string_from_bitvector()
 
                 # break
@@ -444,10 +431,10 @@ class AES():
             if bitvec.size < 128:
                 bitvec.pad_from_right(128 - (bitvec.size % 128))
             chunk = bitvec ^ round_keys[0]
-            print('initial xor: ', chunk.get_bitvector_in_hex())
-            print('bitvec is: ', type(bitvec), 'contents are: ', bitvec.getHexStringFromBitVector())
-            print('chunk is: ', type(chunk), 'contents are: ', chunk.getHexStringFromBitVector())
-            print()
+            # print('initial xor: ', chunk.get_bitvector_in_hex())
+            # print('bitvec is: ', type(bitvec), 'contents are: ', bitvec.getHexStringFromBitVector())
+            # print('chunk is: ', type(chunk), 'contents are: ', chunk.getHexStringFromBitVector())
+            # print()
             for i in range (4):
                 for j in range (4):
                     statearray[j][i] = int(chunk[32*i + 8*j:32*i + 8*(j+1)])
@@ -458,7 +445,7 @@ class AES():
                 statearray[2] = np.roll(statearray[2], 2)
                 statearray[3] = np.roll(statearray[3], 3)
 
-                print('round is: ', currentround)
+                # print('round is: ', currentround)
                 
                 # sub bytes
                 for i in range (4):
@@ -489,8 +476,8 @@ class AES():
                     for j in range(4):
                         tempBitVec += statearray[j][i]
                 statearray = tempBitVec ^ round_key
-                print('statearray after xor in round', currentround, ' is: ')
-                print(hex(int(statearray)))
+                # print('statearray after xor in round', currentround, ' is: ')
+                # print(hex(int(statearray)))
                 if (currentround != 13):
                     # mix columns 
                     for i in range(4):
@@ -504,10 +491,10 @@ class AES():
                     # transposing
                     statearray = [[int(temparray[i][j]) for j in range(4)] for i in range(4)]
 
-                    print('statearray at end of round is: ', type(statearray))
-                    for i in range(4):
-                        print(hex(statearray[i][0]),hex(statearray[i][1]),hex(statearray[i][2]),hex(statearray[i][3]))
-                print()
+                #     print('statearray at end of round is: ', type(statearray))
+                #     for i in range(4):
+                #         print(hex(statearray[i][0]),hex(statearray[i][1]),hex(statearray[i][2]),hex(statearray[i][3]))
+                # print()
             # break
             outText += str(statearray.get_bitvector_in_ascii())
             # break
