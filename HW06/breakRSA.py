@@ -1,10 +1,153 @@
-# Aubrey Gatewood 2/26/2024
+# Aubrey Gatewood 2/27/2024
 import sys
+from BitVector import *
 import random
 from math import gcd as bltingcd
-# from math import pow
-from BitVector import *
 
+class breakRSA():
+    def __init__(self) -> None:
+        self.e = 3
+        
+
+    def encrypt(self, message, enc1, enc2, enc3, n_1_2_3):
+        # generate 3 sets of public and private keys with e = 3
+        myRSA = RSA(3)
+        with open(n_1_2_3, 'w') as f:
+            myRSA.generate("p_test.txt", "q_test.txt")
+            with open("p_test.txt", 'r') as f2:
+                p = f2.read()
+            with open ("q_test.txt", 'r') as f2:
+                q = f2.read()
+            myRSA.encrypt(message, enc1, p, q)
+            n = int(p) * int(q)
+            # f.write("n1: ")
+            f.write(str(n))
+            f.write("\n")
+
+            myRSA.generate("p_test.txt", "q_test.txt")
+            with open("p_test.txt", 'r') as f2:
+                p = f2.read()
+            with open ("q_test.txt", 'r') as f2:
+                q = f2.read()
+            myRSA.encrypt(message, enc2, p, q)
+            n = int(p) * int(q)
+            # f.write("n2: ")
+            f.write(str(n))
+            f.write("\n")
+
+            myRSA.generate("p_test.txt", "q_test.txt")
+            with open("p_test.txt", 'r') as f2:
+                p = f2.read()
+            with open ("q_test.txt", 'r') as f2:
+                q = f2.read()
+            myRSA.encrypt(message, enc3, p, q)
+            n = int(p) * int(q)
+            # f.write("n3: ")
+            f.write(str(n))
+            f.write("\n")
+                
+        
+
+    def crack(self, enc1, enc2, enc3, n_1_2_3,  cracked):
+        # given 3 ciphertexts and their public keys, recover original plaintext and write to a file
+        Ni = []
+        N = 1
+        with open(n_1_2_3, 'r') as FILEIN:
+            for line in FILEIN: 
+                line = line.strip("\n")
+                Ni.append(int(line))
+                N *= int(line)
+        # print("product of mods is: ", N)
+        N1N2N3 = []
+        Ni_inv = []
+        for i,n in enumerate(Ni):
+            N1N2N3.append(N // n) # this is N1, N2, N3 after division
+            Ni_inv.append(int(BitVector(intVal = N1N2N3[i]).multiplicative_inverse(BitVector(intVal = n))))
+        # need to read text files into bitvectors and read 256 bits at a time
+        # read file contents, pass as hexstring to bitvectors, then use block size iterators to loop 
+        # because we aren't using read_bits anymore 
+        with open(enc1, 'r') as FILEIN:
+            text1 = BitVector(hexstring = FILEIN.read())
+        with open(enc2, 'r') as FILEIN:
+            text2 = BitVector(hexstring = FILEIN.read())
+        with open(enc3, 'r') as FILEIN:
+            text3 = BitVector(hexstring = FILEIN.read())
+        startblock = 0
+        endblock = 256
+        currBlock = 0
+        lastBlock = text1.size // 256
+        with open(cracked, 'w') as FILEOUT: 
+            while (currBlock < lastBlock): # enc1-3 should all be same length exactly
+                chunk1 = text1[startblock:endblock]
+                chunk2 = text2[startblock:endblock]
+                chunk3 = text3[startblock:endblock]
+                chunk1 = chunk1.int_val() * N1N2N3[0] * Ni_inv[0]
+                chunk2 = chunk2.int_val() * N1N2N3[1] * Ni_inv[1]
+                chunk3 = chunk3.int_val() * N1N2N3[2] * Ni_inv[2]
+                M3 = (chunk1 + chunk2 + chunk3) % N
+                M3 = self.solve_pRoot(3, M3)
+                final = BitVector(intVal = M3,size =128)
+                # print(final.get_bitvector_in_ascii())
+                FILEOUT.write(final.get_bitvector_in_ascii())
+                startblock += 256
+                endblock += 256
+                currBlock += 1
+
+
+    def MI(self, num, mod):
+        '''
+        This function uses ordinary integer arithmetic implementation of the
+        Extended Euclid's Algorithm to find the MI of the first-arg integer
+        vis-a-vis the second-arg integer.
+        '''
+        NUM = num; MOD = mod
+        x, x_old = 0, 1
+        y, y_old = 1, 0
+        while mod:
+            q = num // mod
+            num, mod = mod, num % mod
+            x, x_old = x_old - q * x, x
+            y, y_old = y_old - q * y, y
+        if num != 1:
+            print("\nNO MI. However, the GCD of %d and %d is %u\n" % (NUM, MOD, num))
+        else:
+            MI = (x_old + MOD) % MOD
+            print("\nMI of %d modulo %d is: %d\n" % (NUM, MOD, MI))
+            return MI
+
+    def solve_pRoot(self, p, x): 
+        '''
+        Implement binary search to find the pth root of x. The logic is as follows:
+        1). Initialize upper bound to 1
+        2). while u^p <= x, increment u by itself
+        3). Intialize lower bound to u//2
+        4). While the lower bound is smaller than the upper bound:
+            a). Compute the midpoint as (lower + upper) / 2
+            b). Exponentiate the midpoint by p
+            c). if lower bound < midpoint and midpoint < x, then set the new lower bound to midpoint
+            d). else if upperbown > midpoint and midpoint > x, then set the new upper bown to midpoint
+            e). else return the midpoint
+        5). If while loop breaks before returning, return midpoint + 1
+
+        Author: Joseph Wang
+            wang3450 at purdue edu
+
+        '''
+
+        u = 1
+        while u ** p <= x: u *= 2
+
+        l = u // 2
+        while l < u:
+            mid = (l + u) // 2
+            mid_pth = mid ** p
+            if l < mid and mid_pth < x:
+                l = mid
+            elif u > mid and mid_pth > x:
+                u = mid
+            else:
+                return mid
+        return mid + 1
 
 class RSA(): 
     def __init__(self, e) -> None:
@@ -64,12 +207,10 @@ class RSA():
 
         
 
-    def encrypt(self, plaintext:str, ciphertext:str) -> None:
+    def encrypt(self, plaintext:str, ciphertext:str, p, q) -> None:
         # always pad from right, don't pad from left because it doesn't work
-        with open(sys.argv[4], 'r') as f:
-            self.q = f.read()
-        with open (sys.argv[3], 'r') as f:
-            self.p = f.read()
+        self.q = q
+        self.p = p
         n = int(self.q) * int(self.p) # this is the mod
         plainbv = BitVector(filename = plaintext)
         with open(ciphertext, 'w') as f:
@@ -81,7 +222,7 @@ class RSA():
                 plainchunk = pow(plainchunk.intValue(), self.e, n)
                 outchunk = BitVector(intVal = plainchunk, size = 256)
                 f.write(outchunk.get_bitvector_in_hex())
-                
+            
 
     def decrypt(self, ciphertext:str, recovered_plaintext:str) -> None:
         with open(sys.argv[4], 'r') as f:
@@ -103,7 +244,6 @@ class RSA():
                 cipherchunk = pow(cipherchunk.intValue(), d, n) # M = C^d % n
                 outchunk = BitVector(intVal = cipherchunk, size = 128)
                 f.write(outchunk.get_bitvector_in_ascii())
-
 
 class PrimeGenerator( object ):                                              #(A1)
 
@@ -178,15 +318,12 @@ class PrimeGenerator( object ):                                              #(A
                     print("    candidate is: %d" % self.candidate)           #(E21)
         return self.candidate  
     
+
 if __name__ == "__main__":
-    cipher = RSA(e=65537)
-    # try: 
+    breaker = breakRSA()
     if sys.argv[1] == "-e":
-        cipher.encrypt(plaintext=sys.argv[2], ciphertext=sys.argv[5])
-    elif sys.argv[1] == "-d":
-        cipher.decrypt(ciphertext=sys.argv[2], recovered_plaintext=sys.argv[5])
-    elif sys.argv[1] == "-g":
-        cipher.generate(p_text=sys.argv[2], q_text=sys.argv[3])
-    # except Exception as e:
-    #     print(f"Error given was: {e}")
-    #     print("Call should be one of these forms: \npython RSA.py -g p.txt q.txt \npython RSA.py -e message.txt p.txt q.txt encrypted.txt \npython RSA.py -d encrypted.txt p.txt q.txt decrypted.txt")
+        breaker.encrypt(message=sys.argv[2], enc1=sys.argv[3], enc2=sys.argv[4], enc3=sys.argv[5], n_1_2_3=sys.argv[6])
+    elif sys.argv[1] == "-c":
+        breaker.crack(enc1=sys.argv[2], enc2=sys.argv[3], enc3=sys.argv[4], n_1_2_3=sys.argv[5], cracked=sys.argv[6])
+    else:
+        print("wrong argument format")
