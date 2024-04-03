@@ -31,6 +31,9 @@
 #define MAX_PENDING 10     /* maximun # of pending for connection */
 #define MAX_DATA_SIZE 5
 
+// compilation command
+// gcc -o server -g -fno-stack-protector server.c
+
 int DataPrint(char *recvBuff, int numBytes);
 char* clientComm(int clntSockfd,int * senderBuffSize_addr, int * optlen_addr); 
 
@@ -118,7 +121,12 @@ char * clientComm(int clntSockfd,int * senderBuffSize_addr, int * optlen_addr){
         exit(1);
     }    
 
+    if (strlen(recvBuff) >= MAX_DATA_SIZE) {
+        fprintf(stderr, "received data is larger than buffer size \n");
+        exit(1);
+    }
     strcpy(str, recvBuff);
+    // 0x7fffffffdd90 in dump
 	
     /* send data to the client */
     if (send(clntSockfd, str, strlen(str), 0) == -1) {
@@ -127,11 +135,15 @@ char * clientComm(int clntSockfd,int * senderBuffSize_addr, int * optlen_addr){
         exit(1);
     }
 
-
+    // 0x7fffffffddb8 is return val address
     return recvBuff;
+    // 0xb8 - 0x90 = dec 40 hex 28
 }
 
 void secretFunction(){
+    // 0x0000000000400e18 is address
+    // put string AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\x18\x0e\x40\x00
+    // A's cause buffer overflow, remaining part is address of secret function to send from client
     printf("You weren't supposed to get here!\n");
     exit(1);
 }
